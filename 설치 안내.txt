@@ -21,11 +21,12 @@ PORTER COFFEE 앱 — 설치 안내
   - Firebase 콘솔 "Firestore Database > 규칙" 탭에 firestore.rules 내용을
     전부 붙여넣고 "게시"
 
-[3] 앱 올리기 (Netlify, 무료)
-  1. https://app.netlify.com/drop 접속 (구글 계정으로 가입)
-  2. 이 폴더(cafe-app) 전체를 화면에 끌어다 놓기
-  3. 생성된 주소(예: https://xxxx.netlify.app)가 앱 주소
-     "Site configuration > Change site name" 에서 주소 이름을 바꿀 수 있음
+[3] 앱 올리기 (GitHub Pages, 무료)
+  1. GitHub 저장소(Portercoffee) 화면 → "uploading an existing file" (또는 Add file > Upload files)
+  2. 이 폴더 안의 파일 전부와 icons 폴더를 끌어다 놓기 → 아래 "Commit changes"
+  3. 저장소 "Settings" → 왼쪽 "Pages"
+       → Source: Deploy from a branch → Branch: main, 폴더: / (root) → Save
+  4. 1~2분 뒤 같은 화면 위쪽에 앱 주소가 나옴 (예: https://serenecoz.github.io/Portercoffee/)
 
 [4] 각 기기에서 설치
   - 아이폰/아이패드: Safari로 주소 열기 → 공유(□↑) → 홈 화면에 추가
@@ -34,5 +35,5 @@ PORTER COFFEE 앱 — 설치 안내
   - 처음 한 번 공용 이메일/비밀번호로 로그인하면 계속 유지됨
 
 [나중에 고칠 때]
-  - 파일을 수정한 뒤 Netlify 사이트의 "Deploys" 탭에 폴더를 다시 끌어다 놓으면 반영됨
+  - 바뀐 파일만 GitHub 저장소에 다시 올리면(같은 이름으로 덮어쓰기) 1~2분 뒤 반영됨
   - 고객 데이터는 Firebase에 있어서 앱을 다시 올려도 지워지지 않음
