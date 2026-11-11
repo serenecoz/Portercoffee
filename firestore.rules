@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 아래 목록에 있는 이메일로 로그인한 사람만 장부를 보고 고칠 수 있어요.
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.email in ['CAFE_EMAIL_HERE'];
+    }
+    match /{document=**} {
+      allow read, write: if isStaff();
+    }
+  }
+}

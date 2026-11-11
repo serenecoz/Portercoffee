@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PORTER COFFEE</title>
+<meta name="theme-color" content="#7b3f1f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PORTER COFFEE">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<script src="config.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<!-- 로그인 화면 -->
+<div class="gate" id="gate">
+  <div class="card">
+    <h1><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/></svg>PORTER COFFEE</h1>
+    <div id="gateBody"><p>불러오는 중…</p></div>
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/></svg>
+      PORTER COFFEE
+    </div>
+    <nav id="nav">
+      <button data-tab="cust" class="on">고객</button>
+      <button data-tab="day">오늘 내역</button>
+      <button data-tab="menu">메뉴 관리</button>
+      <button data-tab="data">엑셀 · 설정</button>
+    </nav>
+    <div class="sync" id="sync"><span class="dot"></span><span id="syncTxt">연결 중…</span></div>
+    <button class="hdr-btn" id="installBtn" hidden>앱 설치</button>
+  </header>
+  <div class="banner" id="banner"></div>
+  <main>
+    <section class="view on" id="v-cust">
+      <div class="list-pane">
+        <div class="search">
+          <div class="search-box" id="sbox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="q" type="search" placeholder="이름 검색 (초성 OK: ㄱㅁㅅ)" autocomplete="off" enterkeyhint="search">
+            <button class="clear" id="qclear" aria-label="지우기">×</button>
+          </div>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="list-meta"><span id="cnt"></span><button data-act="add-cust">+ 고객 추가</button></div>
+        <div class="list" id="list"></div>
+      </div>
+      <div class="detail-pane" id="detailPane"></div>
+    </section>
+
+    <section class="view" id="v-day">
+      <div class="page"><div class="page-inner">
+        <h2>일별 내역</h2>
+        <p class="sub">퇴근 전 하루 장부 사용·충전을 한눈에 확인하세요.</p>
+        <div class="toolbar">
+          <button class="btn ghost" data-act="day-prev">‹</button>
+          <input type="date" class="field" id="dayPick">
+          <button class="btn ghost" data-act="day-next">›</button>
+          <button class="btn ghost" data-act="day-today">오늘</button>
+        </div>
+        <div class="stats" id="dayStats"></div>
+        <div class="card" id="dayList"></div>
+      </div></div>
+    </section>
+
+    <section class="view" id="v-menu">
+      <div class="page"><div class="page-inner">
+        <h2>메뉴 관리</h2>
+        <p class="sub">여기 있는 메뉴가 고객 화면에 버튼으로 나와요. 수정하면 바로 저장됩니다.</p>
+        <div class="toolbar"><button class="btn primary" data-act="menu-add">+ 메뉴 추가</button></div>
+        <div class="card">
+          <div class="mhead"><span>메뉴 이름</span><span>가격(원)</span><span>분류</span><span></span></div>
+          <div id="menuRows"></div>
+        </div>
+
+        <h2 style="margin-top:34px">옵션 (추가 · 할인)</h2>
+        <p class="sub">고객 화면에서 메뉴를 누르기 전에 켜면 가격에 자동으로 더하거나 빼요. 예: 테이크아웃 −500, 디카페인 +500</p>
+        <div class="toolbar"><button class="btn primary" data-act="opt-add">+ 옵션 추가</button></div>
+        <div class="card">
+          <div class="mhead"><span>옵션 이름</span><span>추가/할인</span><span>금액(원)</span><span></span></div>
+          <div id="optRows"></div>
+        </div>
+
+        <h2 style="margin-top:34px">충전 적립</h2>
+        <p class="sub">장부 고객이 충전하면 받은 금액에 이 비율만큼 더 얹어 충전해요.</p>
+        <div class="card box" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>받은 금액의</span>
+          <input class="field num" id="bonusRate" inputmode="numeric" style="width:90px;text-align:right">
+          <span>% 추가 적립</span>
+          <span class="hint" style="margin:0 0 0 auto" id="bonusEx"></span>
+        </div>
+      </div></div>
+    </section>
+
+    <section class="view" id="v-data">
+      <div class="page"><div class="page-inner">
+        <h2>엑셀 · 설정</h2>
+        <p class="sub">지금 쓰는 엑셀 장부를 그대로 불러오고, 언제든 엑셀로 내려받을 수 있어요.</p>
+        <div class="card box">
+          <h3>엑셀에서 불러오기</h3>
+          <p>첫 줄에 <b>이름</b>, <b>잔액</b>(또는 금액) 칸이 있으면 자동으로 찾아요. 소속·메모 칸도 있으면 같이 가져옵니다. 머리글이 없으면 A열=이름, B열=잔액으로 읽어요. (적립 없이 잔액 그대로 들어가요)</p>
+          <input type="file" id="importFile" accept=".xlsx,.xls,.csv" hidden>
+          <button class="btn primary" data-act="import-pick">엑셀 파일 선택</button>
+          <div id="importArea"></div>
+        </div>
+        <div class="card box">
+          <h3>엑셀로 내려받기</h3>
+          <p>전체 고객 잔액과, '일별 내역'에서 고른 날짜의 사용·충전 내역을 한 파일로 저장합니다.</p>
+          <button class="btn" data-act="export">엑셀 내려받기 (.xlsx)</button>
+        </div>
+        <div class="card box">
+          <h3>이 기기</h3>
+          <p id="whoami"></p>
+          <div class="toolbar" style="margin:0">
+            <button class="btn" data-act="install-help">앱 설치 방법</button>
+            <button class="btn danger" data-act="logout">로그아웃</button>
+          </div>
+        </div>
+      </div></div>
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script type="module" src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>

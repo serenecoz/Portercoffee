@@ -1,0 +1,38 @@
+PORTER COFFEE 앱 — 설치 안내
+=========================
+
+[1] Firebase 만들기 (데이터 저장소, 무료)
+  1. https://console.firebase.google.com 에 구글 계정으로 접속
+  2. "프로젝트 만들기" → 이름: cafe-jangbu → Google 애널리틱스는 꺼도 됨 → 만들기
+  3. 왼쪽 메뉴 "빌드 > Firestore Database" → "데이터베이스 만들기"
+       위치: asia-northeast3 (서울) → "프로덕션 모드" → 만들기
+  4. 왼쪽 메뉴 "빌드 > Authentication" → "시작하기"
+       → "이메일/비밀번호" 선택 → 사용 설정 켜기 → 저장
+       → "사용자" 탭 → "사용자 추가" → 카페 공용 이메일과 비밀번호 입력
+         (실제로 쓰는 이메일이 아니어도 됨. 예: staff@mycafe.com)
+  5. 왼쪽 위 톱니바퀴 "프로젝트 설정" → 아래 "내 앱" → 웹 아이콘(</>)
+       → 앱 닉네임: 장부 → "앱 등록"
+       → 화면에 나오는 firebaseConfig = { apiKey: ... } 부분을 복사
+
+[2] 설정값 넣기
+  - config.js 파일을 메모장으로 열어 null 자리에 복사한 { ... } 를 붙여넣고 저장
+      window.FIREBASE_CONFIG = { apiKey: "...", authDomain: "...", ... };
+  - firestore.rules 파일의 CAFE_EMAIL_HERE 를 4번에서 만든 공용 이메일로 바꿈
+  - Firebase 콘솔 "Firestore Database > 규칙" 탭에 firestore.rules 내용을
+    전부 붙여넣고 "게시"
+
+[3] 앱 올리기 (Netlify, 무료)
+  1. https://app.netlify.com/drop 접속 (구글 계정으로 가입)
+  2. 이 폴더(cafe-app) 전체를 화면에 끌어다 놓기
+  3. 생성된 주소(예: https://xxxx.netlify.app)가 앱 주소
+     "Site configuration > Change site name" 에서 주소 이름을 바꿀 수 있음
+
+[4] 각 기기에서 설치
+  - 아이폰/아이패드: Safari로 주소 열기 → 공유(□↑) → 홈 화면에 추가
+  - 안드로이드: Chrome으로 열기 → ⋮ → 앱 설치
+  - PC: Chrome/Edge 주소창 오른쪽 설치 아이콘
+  - 처음 한 번 공용 이메일/비밀번호로 로그인하면 계속 유지됨
+
+[나중에 고칠 때]
+  - 파일을 수정한 뒤 Netlify 사이트의 "Deploys" 탭에 폴더를 다시 끌어다 놓으면 반영됨
+  - 고객 데이터는 Firebase에 있어서 앱을 다시 올려도 지워지지 않음
