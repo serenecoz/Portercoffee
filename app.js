@@ -7,6 +7,9 @@ import {
   increment, arrayUnion, arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
+// 충전 적립 기능 (사용 안 함). 다시 쓰려면 true로 바꾸세요.
+const BONUS_ON = false;
+
 /* ---------- utils ---------- */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -316,7 +319,7 @@ function amountModal({ title, label, sign, quick, descDefault, cid, kind }) {
         <input class="field big-amt num" name="amt" inputmode="numeric" autofocus autocomplete="off" placeholder="0">
         <div class="quick">${quick.map(q => `<button type="button" data-q="${q}">+${q >= 10000 ? (q / 10000) + '만' : won(q)}</button>`).join('')}<button type="button" data-q="0">지우기</button></div>
       </div>
-      ${kind === 'charge' && S.bonusRate > 0 ? `<label class="chk"><input type="checkbox" name="bonus" checked> 장부 적립 ${S.bonusRate}% 적용</label>` : ''}
+      ${kind === 'charge' && BONUS_ON && S.bonusRate > 0 ? `<label class="chk"><input type="checkbox" name="bonus" checked> 장부 적립 ${S.bonusRate}% 적용</label>` : ''}
       <div class="fld"><label>메모 (선택)</label><input class="field" name="desc" value="${esc(descDefault)}"></div>
       <div id="bonusLine"></div>
       <div class="preview-line"><span>처리 후 잔액</span><b class="num" id="after">${won(c.balance)}원</b></div>
@@ -476,7 +479,7 @@ document.addEventListener('click', e => {
       if (S.tab === 'day') renderDay();
       break;
     }
-    case 'charge': c && amountModal({ title: '충전', label: '받은 금액', sign: 1, quick: [10000, 30000, 50000, 100000], descDefault: '충전', cid: c.id, kind: 'charge' }); break;
+    case 'charge': c && amountModal({ title: '충전', label: '충전할 금액', sign: 1, quick: [10000, 30000, 50000, 100000], descDefault: '충전', cid: c.id, kind: 'charge' }); break;
     case 'custom-use': c && amountModal({ title: '차감', label: '차감할 금액', sign: -1, quick: [1000, 500, 5000], descDefault: '직접 차감', cid: c.id, kind: 'use' }); break;
     case 'edit-cust': c && custModal(c.id); break;
     case 'add-cust': custModal(null); break;
@@ -741,7 +744,7 @@ function startData() {
   S.unsubs.push(onSnapshot(menuRef(), snap => {
     if (!snap.exists() && !snap.metadata.fromCache) {
       // 처음 한 번: 카페 기본 옵션과 적립률을 넣어 둠 (메뉴는 직접 추가)
-      commit(setDoc(menuRef(), { items: [], bonusRate: 10, options: [
+      commit(setDoc(menuRef(), { items: [], bonusRate: 0, options: [
         { id: 'takeout', name: '테이크아웃', amount: -500 },
         { id: 'decaf', name: '디카페인', amount: 500 },
         { id: 'oat', name: '오트 밀크', amount: 500 },
