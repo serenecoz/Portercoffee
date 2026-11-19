@@ -10,6 +10,26 @@ import {
 // 충전 적립 기능 (사용 안 함). 다시 쓰려면 true로 바꾸세요.
 const BONUS_ON = false;
 
+// 처음 로그인할 때 들어가는 PORTER COFFEE 기본 메뉴 (이후에는 앱의 '메뉴 관리'에서 수정)
+const STARTER_MENU = [
+  { id: 'm1', name: "아메리카노", price: 4000, cat: 'Coffee' },
+  { id: 'm2', name: "카페라떼", price: 4500, cat: 'Coffee' },
+  { id: 'm3', name: "바닐라빈라떼", price: 5000, cat: 'Coffee' },
+  { id: 'm4', name: "헤이즐넛라떼", price: 5500, cat: 'Coffee' },
+  { id: 'm5', name: "카푸치노", price: 5500, cat: 'Coffee' },
+  { id: 'm6', name: "아인슈페너", price: 5500, cat: 'Coffee' },
+  { id: 'm7', name: "Porter coffee", price: 5500, cat: 'Coffee' },
+  { id: 'm8', name: "콜드브루", price: 5500, cat: 'Coffee' },
+  { id: 'm9', name: "生 레몬에이드", price: 6000, cat: 'Beverage' },
+  { id: 'm10', name: "말차라떼", price: 6000, cat: 'Beverage' },
+  { id: 'm11', name: "초코라떼", price: 6000, cat: 'Beverage' },
+  { id: 'm12', name: "아이스티", price: 3500, cat: 'Beverage' },
+  { id: 'm13', name: "캐모마일", price: 5000, cat: 'Beverage' },
+  { id: 'm14', name: "Porter blend", price: 5500, cat: 'Filter' },
+  { id: 'm15', name: "Ethiopia", price: 6000, cat: 'Filter' },
+  { id: 'm16', name: "Decaf", price: 6000, cat: 'Filter' },
+];
+
 /* ---------- utils ---------- */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -744,7 +764,7 @@ function startData() {
   S.unsubs.push(onSnapshot(menuRef(), snap => {
     if (!snap.exists() && !snap.metadata.fromCache) {
       // 처음 한 번: 카페 기본 옵션과 적립률을 넣어 둠 (메뉴는 직접 추가)
-      commit(setDoc(menuRef(), { items: [], bonusRate: 0, options: [
+      commit(setDoc(menuRef(), { items: clone(STARTER_MENU), bonusRate: 0, options: [
         { id: 'takeout', name: '테이크아웃', amount: -500 },
         { id: 'decaf', name: '디카페인', amount: 500 },
         { id: 'oat', name: '오트 밀크', amount: 500 },
