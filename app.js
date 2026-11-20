@@ -573,61 +573,158 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- import ---------- */
-let importRows = null;
+let importRows = null, importBook = null, importSel = null, importManual = null;
+const RX = { name: /이름|성함|성명|고객|name/i, bal: /잔액|금액|잔고|남은|잔여|balance/i, org: /소속|부서|기관|회사|팀/i, memo: /메모|비고|참고/i };
+const JUNK = /정리|오름차순|내림차순|정렬|합계|총계|^계$|^소계$|이름|성함|성명|잔액|금액|잔고|^no\.?$|^번호$|^순번$|^비고$|^메모$/i;
+const isBlank = v => v === '' || v == null || String(v).trim() === '';
+const isNumLike = v => typeof v === 'number' || /^\s*[-−]?\s*[\d,]+\s*(원)?\s*$/.test(String(v));
+const isNameLike = v => { const t = String(v ?? '').trim(); return !!t && t.length <= 30 && !isNumLike(t) && !JUNK.test(t) && /[가-힣A-Za-z]/.test(t); };
+const colName = i => XLSX.utils.encode_col(i);
+function numericColAfter(raw, start, nc, end) {
+  for (let i = nc + 1; i < Math.min(end, nc + 6); i++) {
+    let n = 0, t = 0;
+    for (const row of raw.slice(start, start + 300)) { const v = row[i]; if (isBlank(v)) continue; isNumLike(v) ? n++ : t++; }
+    if (n > 0 && n >= t) return i;
+  }
+  return -1;
+}
+/* 시트에서 (이름, 잔액) 묶음을 찾음 — 가나다별로 옆으로 여러 묶음이 있어도 모두 찾음 */
+function detectBlocks(raw) {
+  const blocks = [];
+  for (let r = 0; r < Math.min(raw.length, 15); r++) {
+    const row = (raw[r] || []).map(v => String(v).trim());
+    const nameCols = row.map((v, i) => (RX.name.test(v) && v.length <= 10) ? i : -1).filter(i => i >= 0);
+    if (!nameCols.length) continue;
+    nameCols.forEach((nc, k) => {
+      const end = k + 1 < nameCols.length ? nameCols[k + 1] : Math.max(row.length, nc + 6);
+      const find = rx => { for (let i = nc + 1; i < end; i++) if (rx.test(row[i] || '')) return i; return -1; };
+      let bal = find(RX.bal);
+      if (bal < 0) bal = numericColAfter(raw, r + 1, nc, end);
+      blocks.push({ name: nc, bal, org: find(RX.org), memo: find(RX.memo), start: r + 1 });
+    });
+    return blocks;
+  }
+  // 칸 제목이 없을 때: 글자(이름) 칸 바로 오른쪽의 숫자 칸을 짝지음
+  const sample = raw.slice(0, 400);
+  const width = Math.max(0, ...sample.map(rw => rw.length));
+  const st = [];
+  for (let col = 0; col < width; col++) { let t = 0, n = 0; for (const rw of sample) { const v = rw[col]; if (isBlank(v)) continue; if (isNumLike(v)) n++; else if (isNameLike(v)) t++; } st.push({ t, n }); }
+  for (let col = 0; col < width; col++) {
+    if (st[col].t >= 2 && st[col].t > st[col].n) {
+      let bcol = -1;
+      for (let d = col + 1; d < Math.min(width, col + 4); d++) {
+        if (st[d].n >= st[col].t * 0.4 && st[d].n > st[d].t) { bcol = d; break; }
+      }
+      if (bcol >= 0) { blocks.push({ name: col, bal: bcol, org: -1, memo: -1, start: 0 }); col = bcol; }
+    }
+  }
+  return blocks;
+}
+function rowsFrom(raw, blocks, sheet) {
+  const out = [];
+  for (const b of blocks) for (let r = b.start; r < raw.length; r++) {
+    const row = raw[r] || [];
+    const v = row[b.name];
+    if (!isNameLike(v)) continue;
+    const bv = b.bal >= 0 ? row[b.bal] : '';
+    if (!isBlank(bv) && !isNumLike(bv)) continue; // 금액 자리에 글자 → 표 제목·안내 줄로 보고 건너뜀
+    out.push({
+      name: String(v).trim().replace(/\s+/g, ' '),
+      balance: b.bal >= 0 ? parseAmt(String(bv).replace('−', '-')) : 0,
+      emptyBal: isBlank(bv),
+      org: b.org >= 0 ? String(row[b.org] ?? '').trim() : '',
+      memo: b.memo >= 0 ? String(row[b.memo] ?? '').trim() : '',
+      where: `${sheet} ${colName(b.name)}${r + 1}`,
+    });
+  }
+  return out;
+}
+function analyzeBook(wb) {
+  const hidden = new Set((wb.Workbook?.Sheets || []).map((x, i) => x.Hidden ? wb.SheetNames[i] : null).filter(Boolean));
+  return wb.SheetNames.filter(n => !hidden.has(n)).map(n => {
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true, blankrows: true });
+    const blocks = detectBlocks(raw);
+    return { sheet: n, raw, blocks, rows: rowsFrom(raw, blocks, n) };
+  }).filter(x => x.raw.length);
+}
+function computeImport() {
+  const sheets = importSel === '__all' ? importBook.filter(x => x.rows.length) : importBook.filter(x => x.sheet === importSel);
+  let rows = [];
+  for (const sh of sheets) {
+    if (importManual && importSel !== '__all') rows = rows.concat(rowsFrom(sh.raw, [{ name: importManual.name, bal: importManual.bal, org: -1, memo: -1, start: 0 }], sh.sheet));
+    else rows = rows.concat(sh.rows);
+  }
+  // 같은 이름이 두 번 나오면 첫 번째만 (중복은 따로 알려줌)
+  const seen = new Map(), dups = [];
+  for (const r of rows) { const k = r.name + '|' + r.org; if (seen.has(k)) dups.push(r); else seen.set(k, r); }
+  importRows = [...seen.values()];
+  importRows.dups = dups;
+}
 $('#importFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
   const area = $('#importArea');
   if (!window.XLSX) { area.innerHTML = `<p class="err">엑셀 읽기 도구를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>`; return; }
+  area.innerHTML = `<p class="hint">파일 읽는 중…</p>`;
   try {
     const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
-    const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
-    importRows = parseSheet(raw);
-    renderImport();
+    importBook = analyzeBook(wb);
+    const withRows = importBook.filter(x => x.rows.length);
+    importSel = withRows.length > 1 ? '__all' : (withRows[0] || importBook[0] || {}).sheet;
+    importManual = null;
+    if (!importBook.length) { area.innerHTML = `<p class="err">파일 안에 내용이 없어요.</p>`; return; }
+    computeImport(); renderImport();
   } catch (err) { area.innerHTML = `<p class="err">파일을 읽지 못했어요: ${esc(err.message || err)}</p>`; }
 });
-function parseSheet(raw) {
-  const rx = { name: /이름|성함|성명|고객|name/i, bal: /잔액|금액|잔고|남은|balance/i, org: /소속|부서|기관|회사|팀/i, memo: /메모|비고|참고/i };
-  let hi = -1, cols = {};
-  for (let r = 0; r < Math.min(raw.length, 10); r++) {
-    const row = raw[r].map(v => String(v).trim());
-    const ni = row.findIndex(v => rx.name.test(v));
-    if (ni >= 0) {
-      hi = r; cols.name = ni;
-      cols.bal = row.findIndex((v, i) => i !== ni && rx.bal.test(v));
-      cols.org = row.findIndex((v, i) => i !== ni && rx.org.test(v));
-      cols.memo = row.findIndex((v, i) => i !== ni && rx.memo.test(v));
-      break;
-    }
+function importControls() {
+  const withRows = importBook.filter(x => x.rows.length);
+  const opts = (withRows.length > 1 ? [`<option value="__all" ${importSel === '__all' ? 'selected' : ''}>모든 탭 합치기 (${withRows.length}개 탭)</option>`] : [])
+    .concat(importBook.map(x => `<option value="${esc(x.sheet)}" ${importSel === x.sheet ? 'selected' : ''}>${esc(x.sheet)} 탭 (${x.rows.length}명)</option>`));
+  let colPick = '';
+  const sh = importBook.find(x => x.sheet === importSel);
+  if (sh) {
+    const width = Math.max(1, ...sh.raw.slice(0, 50).map(r => r.length));
+    const sampleOf = c => { for (const r of sh.raw.slice(0, 30)) { const v = r[c]; if (!isBlank(v)) return String(v).slice(0, 8); } return ''; };
+    const colOpts = sel => Array.from({ length: width }, (_, c) => `<option value="${c}" ${sel === c ? 'selected' : ''}>${colName(c)}열${sampleOf(c) ? ' · ' + esc(sampleOf(c)) : ''}</option>`).join('');
+    const found = sh.blocks.map(b => `이름 ${colName(b.name)}열 → 잔액 ${b.bal >= 0 ? colName(b.bal) + '열' : '없음'}`).join(', ');
+    const cur = importManual || { name: sh.blocks[0]?.name ?? 0, bal: sh.blocks[0]?.bal ?? 1 };
+    colPick = `<details ${importManual ? 'open' : ''} style="margin-top:8px"><summary class="hint" style="cursor:pointer">찾은 칸: ${found || '없음'} — 틀렸다면 직접 고르기</summary>
+      <div class="toolbar" style="margin:8px 0 0">
+        <label class="hint" style="margin:0">이름 칸</label><select class="field" id="impName" style="width:auto">${colOpts(cur.name)}</select>
+        <label class="hint" style="margin:0">잔액 칸</label><select class="field" id="impBal" style="width:auto">${colOpts(cur.bal)}</select>
+        <button class="btn" id="impApply">이 칸으로 다시 읽기</button>${importManual ? '<button class="btn ghost" id="impAuto">자동으로</button>' : ''}
+      </div></details>`;
   }
-  if (hi < 0) cols = { name: 0, bal: 1, org: -1, memo: -1 };
-  const out = [];
-  for (let r = hi + 1; r < raw.length; r++) {
-    const row = raw[r];
-    const name = String(row[cols.name] ?? '').trim();
-    if (!name || /^(합계|총계|계)$/.test(name)) continue;
-    out.push({
-      name,
-      balance: cols.bal >= 0 ? parseAmt(row[cols.bal]) : 0,
-      org: cols.org >= 0 ? String(row[cols.org] ?? '').trim() : '',
-      memo: cols.memo >= 0 ? String(row[cols.memo] ?? '').trim() : '',
-    });
-  }
-  return out;
+  return `<div class="toolbar" style="margin:12px 0 0"><label class="hint" style="margin:0">읽을 탭</label><select class="field" id="impSheet" style="width:auto">${opts.join('')}</select></div>${colPick}`;
+}
+function bindImportControls() {
+  const sel = $('#impSheet'); sel && (sel.onchange = () => { importSel = sel.value; importManual = null; computeImport(); renderImport(); });
+  const ap = $('#impApply'); ap && (ap.onclick = () => { importManual = { name: +$('#impName').value, bal: +$('#impBal').value }; computeImport(); renderImport(); });
+  const au = $('#impAuto'); au && (au.onclick = () => { importManual = null; computeImport(); renderImport(); });
 }
 function renderImport() {
   const area = $('#importArea');
-  if (!importRows || !importRows.length) { area.innerHTML = `<p class="err">가져올 고객을 찾지 못했어요. 첫 열에 이름, 다음 열에 금액이 있는지 확인해 주세요.</p>`; return; }
+  const head = importControls();
+  if (!importRows || !importRows.length) {
+    area.innerHTML = head + `<p class="err">이 탭에서 고객을 찾지 못했어요. 다른 탭을 고르거나, '직접 고르기'에서 이름 칸과 잔액 칸을 골라 주세요.</p><button class="btn ghost" id="cancelImport">취소</button>`;
+    bindImportControls(); $('#cancelImport').onclick = () => { importRows = null; area.innerHTML = ''; };
+    return;
+  }
   const byName = new Map([...S.customers.values()].map(c => [c.name + '|' + (c.org || ''), c]));
   const dupCount = importRows.filter(r => byName.has(r.name + '|' + r.org)).length;
   const total = importRows.reduce((s, r) => s + r.balance, 0);
-  area.innerHTML = `
-    <div class="preview"><table><thead><tr><th>이름</th><th>소속</th><th style="text-align:right">잔액</th><th>메모</th><th></th></tr></thead><tbody>
-    ${importRows.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.org)}</td><td class="r num">${won(r.balance)}</td><td>${esc(r.memo)}</td><td style="color:var(--muted);font-size:12px">${byName.has(r.name + '|' + r.org) ? '이미 있음' : '새 고객'}</td></tr>`).join('')}
+  const emptyN = importRows.filter(r => r.emptyBal).length;
+  const fileDups = importRows.dups || [];
+  area.innerHTML = head + `
+    <div class="preview"><table><thead><tr><th>이름</th><th>소속</th><th style="text-align:right">잔액</th><th>위치</th><th></th></tr></thead><tbody>
+    ${importRows.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.org)}</td><td class="r num" ${r.emptyBal ? 'style="color:var(--warn)"' : ''}>${r.emptyBal ? '(빈칸)' : won(r.balance)}</td><td style="color:var(--muted);font-size:12px">${esc(r.where)}</td><td style="color:var(--muted);font-size:12px">${byName.has(r.name + '|' + r.org) ? '이미 있음' : '새 고객'}</td></tr>`).join('')}
     </tbody></table></div>
-    <p style="margin:0 0 10px"><b>${importRows.length}명</b> · 잔액 합계 <b class="num">${won(total)}원</b>${dupCount ? ` · 이미 있는 고객 ${dupCount}명` : ''}</p>
-    ${dupCount ? `<div class="fld"><label>이미 있는 고객은</label><select class="field" id="dupMode" style="max-width:320px"><option value="overwrite">엑셀의 잔액으로 덮어쓰기</option><option value="skip">건너뛰기 (지금 앱의 잔액 유지)</option></select></div>` : ''}
+    <p style="margin:0 0 6px"><b>${importRows.length}명</b> · 잔액 합계 <b class="num">${won(total)}원</b>${dupCount ? ` · 앱에 이미 있는 고객 ${dupCount}명` : ''}</p>
+    ${emptyN ? `<p class="hint" style="margin:0 0 6px">잔액 칸이 비어 있는 ${emptyN}명은 0원으로 들어가요.</p>` : ''}
+    ${fileDups.length ? `<p class="hint" style="margin:0 0 6px">파일 안에 같은 이름이 또 나와서 뺀 줄 ${fileDups.length}개: ${fileDups.slice(0, 8).map(d => esc(d.name) + '(' + esc(d.where) + ')').join(', ')}${fileDups.length > 8 ? ' …' : ''}</p>` : ''}
+    ${dupCount ? `<div class="fld"><label>앱에 이미 있는 고객은</label><select class="field" id="dupMode" style="max-width:320px"><option value="overwrite">엑셀의 잔액으로 덮어쓰기</option><option value="skip">건너뛰기 (지금 앱의 잔액 유지)</option></select></div>` : ''}
     <div class="toolbar"><button class="btn primary" id="doImport">${importRows.length}명 가져오기</button><button class="btn ghost" id="cancelImport">취소</button><span class="hint" id="impMsg"></span></div>`;
+  bindImportControls();
   $('#cancelImport').onclick = () => { importRows = null; area.innerHTML = ''; };
   $('#doImport').onclick = async () => {
     const mode = $('#dupMode')?.value || 'overwrite';

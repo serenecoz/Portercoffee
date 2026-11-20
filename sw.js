@@ -1,5 +1,5 @@
 // 카페 장부 서비스 워커: 앱 화면을 기기에 저장해 두어 빠르게 열리고, 인터넷이 끊겨도 열리게 함
-const CACHE = 'jangbu-v4';
+const CACHE = 'jangbu-v5';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
