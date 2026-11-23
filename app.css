@@ -218,3 +218,7 @@ html,body{overscroll-behavior:none}
 .gate .btn{width:100%;justify-content:center;padding:13px;font-size:16px}
 .gate pre{white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:10px;font-size:12.5px}
 .staff-pick{display:flex;gap:6px;flex-wrap:wrap}
+
+.quick .neg-btn{color:var(--bad);font-weight:700}
+.quick .neg-btn.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.danger-fill{background:var(--bad);border-color:var(--bad);color:#fff}

@@ -337,7 +337,8 @@ function amountModal({ title, label, sign, quick, descDefault, cid, kind }) {
     <form class="mb" id="mform">
       <div class="fld"><label>${esc(label)}</label>
         <input class="field big-amt num" name="amt" inputmode="numeric" autofocus autocomplete="off" placeholder="0">
-        <div class="quick">${quick.map(q => `<button type="button" data-q="${q}">+${q >= 10000 ? (q / 10000) + '만' : won(q)}</button>`).join('')}<button type="button" data-q="0">지우기</button></div>
+        <div class="quick">${kind === 'charge' ? `<button type="button" id="negBtn" class="neg-btn" aria-pressed="false">− 마이너스</button>` : ''}${quick.map(q => `<button type="button" data-q="${q}">+${q >= 10000 ? (q / 10000) + '만' : won(q)}</button>`).join('')}<button type="button" data-q="0">지우기</button></div>
+        ${kind === 'charge' ? `<div class="hint">잘못 충전한 금액을 빼려면 <b>− 마이너스</b>를 누르고 금액을 넣으세요.</div>` : ''}
       </div>
       ${kind === 'charge' && BONUS_ON && S.bonusRate > 0 ? `<label class="chk"><input type="checkbox" name="bonus" checked> 장부 적립 ${S.bonusRate}% 적용</label>` : ''}
       <div class="fld"><label>메모 (선택)</label><input class="field" name="desc" value="${esc(descDefault)}"></div>
@@ -348,28 +349,47 @@ function amountModal({ title, label, sign, quick, descDefault, cid, kind }) {
     <div class="mf"><button class="btn ghost" data-act="close-modal">취소</button><button class="btn primary" id="mok">${esc(title)}</button></div>`,
   m => {
     const amt = m.querySelector('[name=amt]');
+    const negBtn = m.querySelector('#negBtn');
+    const okBtn = m.querySelector('#mok');
+    let neg = false;
     const bonusChk = m.querySelector('[name=bonus]');
-    const bonusOf = v => (bonusChk && bonusChk.checked) ? Math.round(v * S.bonusRate / 100) : 0;
+    const bonusOf = v => (bonusChk && bonusChk.checked && v > 0) ? Math.round(v * S.bonusRate / 100) : 0;
+    const mag = () => Math.abs(parseAmt(amt.value));
+    const setNeg = on => {
+      neg = !!on && kind === 'charge';
+      if (negBtn) { negBtn.classList.toggle('on', neg); negBtn.setAttribute('aria-pressed', neg); negBtn.textContent = neg ? '− 마이너스 켜짐' : '− 마이너스'; }
+      okBtn.textContent = neg ? '빼기' : title;
+      okBtn.classList.toggle('danger-fill', neg);
+    };
     const upd = () => {
-      const v = parseAmt(amt.value); amt.value = v ? won(v) : '';
-      const b = bonusOf(v);
+      if (kind === 'charge' && /^\s*[-−]/.test(amt.value) && !neg) setNeg(true);
+      const v = mag();
+      amt.value = v ? (neg ? '-' : '') + won(v) : (neg ? '-' : '');
+      const signedV = neg ? -v : v;
+      const b = bonusOf(signedV);
       m.querySelector('#bonusLine').innerHTML = b ? `<div class="preview-line"><span>받은 금액 ${won(v)} + 적립 ${won(b)}</span><b class="num plus">${won(v + b)}원 충전</b></div>` : '';
-      m.querySelector('#after').textContent = won(c.balance + sign * (v + b)) + '원';
+      m.querySelector('#after').textContent = won(c.balance + (kind === 'charge' ? signedV + b : sign * v)) + '원';
     };
     amt.addEventListener('input', upd);
     bonusChk && bonusChk.addEventListener('change', upd);
-    m.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { const q = +b.dataset.q; amt.value = q ? won(parseAmt(amt.value) + q) : ''; upd(); amt.focus(); }));
+    negBtn && negBtn.addEventListener('click', () => { setNeg(!neg); upd(); amt.focus(); });
+    m.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { const q = +b.dataset.q; amt.value = q ? won(mag() + q) : ''; upd(); amt.focus(); }));
     const submit = e => {
       e && e.preventDefault();
-      const v = parseAmt(amt.value);
+      const v = mag();
       if (v <= 0) { m.querySelector('#merr').textContent = '금액을 입력해 주세요.'; return; }
       let desc = m.querySelector('[name=desc]').value.trim() || descDefault;
-      const b = bonusOf(v);
       closeModal();
       let en;
       if (kind === 'charge') {
-        if (b) desc += ` ${won(v)} + 적립 ${won(b)}`;
-        en = applyTx(cid, v + b, desc, kind, { pay: v, bonus: b });
+        if (neg) {
+          if (desc === descDefault) desc = '마이너스 정정';
+          en = applyTx(cid, -v, desc, kind, { pay: -v, bonus: 0 });
+        } else {
+          const b = bonusOf(v);
+          if (b) desc += ` ${won(v)} + 적립 ${won(b)}`;
+          en = applyTx(cid, v + b, desc, kind, { pay: v, bonus: b });
+        }
       } else en = applyTx(cid, sign * v, desc, kind);
       en && txToast(en);
     };
